@@ -1,4 +1,4 @@
-%   grappa.m
+%   grappa_caipi.m
 %   mchiew@fmrib.ox.ac.uk
 %
 %   inputs: 
@@ -7,16 +7,18 @@
 %           calib   -   (nc, cx, cy, cz) complex calibration k-space data
 %           R       -   [Rx, Ry] or [Rx, Ry, Rz] acceleration factors
 %           kernel  -   [kx, ky] or [kx, ky, kz] kernel size 
+%           indices -   (ky,kz) indices of the phase encoding lines
+%  Optional:
 %           tol     -   singular value cutoff threshold for kernel weight
 %                       training, relative to s(1), defaults to pinv default
 %
 %   output:
 %           recon   -   (nc, nx, ny, nz) complex reconstructed k-space data
 
-function data = grappa(data, calib, R, kernel, tol)
+function data = grappa_caipi(data, calib, R, kernel, indices, tol)
 
 %% Use default pinv tolerance if not supplied
-if nargin < 5
+if nargin < 6
     pinv_reg = @pinv;
 else
     pinv_reg = @(A)pinv(A, tol*norm(A,2));
@@ -31,9 +33,9 @@ if numel(kernel) == 2
 end
 
 %%  Prepare masks and zero-pad data
-pad     =   floor(R.*kernel/2);
+pad     =   ceil(R.*kernel/2)+1;%floor(R.*kernel/2);
 mask    =   padarray(data~=0, [0 pad]);
-data    =   padarray(data,    [0 pad],'replicate');
+data    =   padarray(data,    [0 pad]);
 loop    =   size(data,5);
 offset  =   numel(data(:,:,:,:,1));
 
@@ -41,7 +43,7 @@ offset  =   numel(data(:,:,:,:,1));
 for type = 1:prod(R(2:end))-1
 
     %   Collect source and target calibration points for weight estimation   
-    [src, trg]  =   grappa_get_indices(kernel, true(size(calib)), pad, R, type);
+    [src, trg]  =   grappa_get_indices_caipi(kernel, true(size(calib)), pad, R, type,indices);
 
     %   Perform weight estimation    
     weights     =   calib(trg)*pinv_reg(calib(src));
@@ -50,7 +52,7 @@ for type = 1:prod(R(2:end))-1
     for m = 1:loop               
         
         %   Collect source points in under-sampled data for weight application    
-        [src, trg]  =   grappa_get_indices(kernel, mask(:,:,:,:,m), pad, R, type, (m-1)*offset);
+        [src, trg]  =   grappa_get_indices_caipi(kernel, mask(:,:,:,:,m), pad, R, type, indices, (m-1)*offset);
         
         %   Apply weights to reconstruct missing data    
         data(trg)   =   weights*data(src);         

@@ -1,5 +1,7 @@
-%   grappa_get_indices.m
+%   grappa_get_indices_caipi.m
+%   modified by Yonglihe @yonglihe@umich.edu from grappa_get_indices.m by
 %   mchiew@fmrib.ox.ac.uk
+%   This is for recon with skipped CAIPI sampling pattern
 %
 %   inputs: 
 %           kernel  -   [sx, sy, sz] kernel size in each dimension
@@ -7,16 +9,19 @@
 %           pad     -   [pad_x, pad_y, pad_z] size of padding in each direction 
 %           type    -   (scalar, must be < R) indicates which of the R(2)*R(3)-1 kernels
 %                       you are trying to index over
+%           indices -   (ky,kz) indices of the phase encoding lines
+%   Optionals:
 %           offset  -   additional index offset that gets added to src,trg
+
 %
 %   output:
 %           src     -   linear indices for all source points (c*sx*sy*sz, all possible targets)
 %           trg     -   linear indices for all the target points (c, all possible targets)
 
-function [src, trg] = grappa_get_indices(kernel, samp, pad, R, type, offset)
+function [src, trg] = grappa_get_indices_caipi(kernel, samp, pad, R, type, indices, offset)
 
 %   Offset is optional, 0 by default
-if nargin < 6
+if nargin < 7
     offset  =   0;
 end
 
@@ -43,14 +48,31 @@ kz  =   1+pad(3):dz-pad(3);
 %%  Compute indices for a single coil
 
 %   Find relative indices for kernel source points
+%consider the case where kernel(3)=2, for now
+caipi_Ry=3;
+
+if kernel(3)==3
+    idx=flip(indices(1:caipi_Ry*kernel(2),:),2);
+elseif kernel(3)==2
+    rows=[1,2]; %initial pair
+    for i=1:kernel(2)-1
+        rows=[rows, 3*i+1, 3*i+2]; %append new pairs
+    end
+    idx=flip(indices(rows,:),2);
+else 
+    error('kernel size in z must be 2 or 3!');
+end
+
 mask    =   false(dx,dy,dz);
-mask(1:R(1):R(1)*kernel(1), 1:R(2):R(2)*kernel(2), 1:R(3):R(3)*kernel(3))    =   true;
+for i=1:size(idx,1)
+    mask(1:R(1):R(1)*kernel(1), idx(i,1),idx(i,2))    =   true;
+end
 k_idx   =   reshape(find(mask),[],1);
 
 %   Find the index for the desired target point (depends on type parameter)
 mask    =   false(dx,dy,dz);
 [yy,zz] =   ind2sub(R(2:3),type+1);
-mask(R(1)*ceil(kernel(1)/2), R(2)*(ceil(kernel(2)/2)-1)+yy, R(3)*(ceil(kernel(3)/2)-1)+zz)    =   true;
+mask(R(1)*ceil(kernel(1)/2), R(2)*(ceil(kernel(2)/2)-1)+yy+(ceil(kernel(3)/2)-1), R(3)*(ceil(kernel(3)/2)-1)+zz)    =   true;
 k_trg   =   reshape(find(mask),[],1);
 
 %   Subtract the target index from source indices

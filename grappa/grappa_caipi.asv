@@ -51,7 +51,7 @@ for type = 1:prod(R(2:end))-1
     isTik=1;
     if isTik
         s=norm(calib(src)*calib(src)');
-        weights=calib(trg)*pinv_tikhonov(calib(src),5e-6*s);
+        weights=calib(trg)*pinv_tikhonov(calib(src),8e-4*s);
     end
     
     %   Loop over extra dimension if they exist
